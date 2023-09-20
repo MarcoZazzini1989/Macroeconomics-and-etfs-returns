@@ -1,0 +1,486 @@
+---
+title: "macro"
+output:
+  html_document: default
+  pdf_document: default
+date: '2023-09-19'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(knitr)
+ library(flipTime)
+library(lubridate)
+library(purrr)
+library(sweep)
+  library(dplyr)
+  library(tidyr)
+  library(tibbletime)
+  library(timetk)
+  library(tidyverse)
+library(tidyquant)
+library(readxl)
+library(xts)
+library(PerformanceAnalytics)
+library(ggplot2)
+library(ggfortify)
+library(ggforce)
+library(rvest)
+library(OECD)
+library(Quandl)
+Quandl.api_key("nxS25F-5b_PsWYfSys_E") 
+library(eurostat)
+
+
+
+```
+
+
+
+```{r}
+CLI_america <- c( "USALOLITOAASTSAM","USALORSGPNOSTSAM")%>% tq_get(get  = "economic.data",
+                                                                   from = "1900-01-01",
+                                                                   to   = "2023-12-31")   %>% rename ( Date = date, Value = price) 
+
+CLI_america %>%
+  mutate(symbol = ifelse(symbol == "USALOLITOAASTSAM", "CLI_USA", "GDP_USA")) -> CLI_america
+
+
+
+
+CLI_america %>% spread( symbol , Value  ) %>%       filter(Date >= "2015-01-01")  %>% tail()
+
+CLI_america %>% filter(Date >= "2015-01-01") %>% ggplot(aes(x=Date,y=Value,color=symbol))+
+  geom_line(size=1)+
+  geom_hline(yintercept = 100, color = palette_light()[[1]]) +
+  facet_wrap(~ symbol, ncol = 2, scales = "free_y") +
+  ggtitle("USA OECD Economic Cycle Road Map")+
+  theme_tq() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        axis.title.x = element_blank())+
+  scale_color_tq()+
+  scale_x_date(date_breaks = "3 months",date_labels = "%d (%b %y)") 
+
+CLI_america %>% filter(Date >= "2000-01-01") %>% ggplot(aes(x=Date,y=Value, color = symbol))+
+  geom_line(size=1)+
+  geom_hline(yintercept = 100, color = palette_light()[[1]]) +
+  ggtitle("USA OECD Economic Cycle Road Map")+
+  theme_tq() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        axis.title.x = element_blank())+
+  scale_color_tq()+
+  
+  scale_x_date(date_breaks = "6 months",date_labels = "%y (%b)") 
+
+
+```
+
+
+```{r}
+## Monthly Economic indicator for G7 Economies
+
+dataset_list <- get_datasets()
+search_dataset("MEI", data = dataset_list)
+datasetG7 <- "MEI"
+dstrucG7 <- get_data_structure(datasetG7)
+
+
+G7_filter_list <- list("G-7", "LOLITOAA" )
+G7_cli <- get_dataset(dataset = datasetG7 , filter = G7_filter_list )
+
+G7_cli %>% tail(10) 
+G7_cli$obsTime %>% AsDate() %>% ceiling_date( "month")  -1 -> G7_cli$obsTime
+G7_cli %>% select(obsTime,obsValue) %>% rename(Date = obsTime, G7cli = obsValue) -> G7_cli
+G7_cli %>%  filter(Date >= "2012-01-01") %>% ggplot(aes(x=Date,y=G7cli))+
+  geom_line(size=1,color='red')+
+  geom_hline(yintercept = 100, color = palette_light()[[1]]) +
+  ggtitle("G7 OECD Economic Cycle Road Map")+
+  theme_tq() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        axis.title.x = element_blank())+
+  scale_color_tq()+
+  scale_x_date(date_breaks = "3 months",date_labels = "%d (%b %y)")
+
+
+
+
+
+
+
+
+
+
+
+
+```
+```{r}
+## Inflation data
+
+
+search_dataset("CPI", data = dataset_list)
+dataset_cpi <- "PRICES_CPI"
+
+filter_list <- list("G-7", "CPALTT01", "GY", "M" )
+cpi_g7 <- get_dataset(dataset = dataset_cpi, filter = filter_list)
+cpi_g7$obsTime %>% AsDate() %>% ceiling_date( "month")  -1 -> cpi_g7$obsTime
+cpi_g7 %>% select(obsTime,obsValue) %>% rename(Date = obsTime, G7cpi = obsValue) -> cpi_g7
+cpi_g7 %>% tail(10)
+cpi_g7%>%  filter(Date >= "2000-01-01") %>% ggplot(aes(x=Date,y=G7cpi))+
+  geom_line(size=1,color='red')+
+  geom_hline(yintercept = 0, color = palette_light()[[1]]) +
+  ggtitle("G7 CPI YoY %")+
+  theme_tq() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        axis.title.x = element_blank())+
+  scale_color_tq()+
+scale_x_date(date_breaks = "6 months",date_labels = "%d (%b %y)")
+
+```
+
+```{r}
+
+## VIX
+
+vix <- tq_get(c("^VIX"),
+              get  = "stock.prices",
+              from = "1900-01-01",
+              to   = Sys.Date()) %>% 
+  mutate(symbol = "VIX")
+
+vix %>% 
+  #filter(date > "2019-12-31") %>%
+  ggplot(aes(x = date, y = adjusted, color = symbol)) +
+  
+  geom_line(color = "#E69F00") +
+  geom_hline(yintercept = vix$adjusted %>% quantile(0.25,na.rm = T) , color = "blue" , linetype = "dotted") +
+  geom_hline(yintercept = vix$adjusted %>% quantile(0.50,na.rm = T), color = "blue" , linetype = "dotted") +
+  geom_hline(yintercept = vix$adjusted %>% mean() , color = "black" , linetype = "dashed") +
+  geom_hline(yintercept = vix$adjusted %>% quantile(0.75,na.rm = T), color = "blue" , linetype = "dotted") +
+  geom_hline(yintercept = vix$adjusted %>% quantile(1,na.rm = T), color = "blue" , linetype = "dotted")+
+  #geom_smooth(color = "black") +
+  scale_x_date(date_breaks =  "6 months", date_labels = "%d %b %Y", expand = c(0, 0)) +
+  scale_y_continuous(breaks = seq(0,100, by = 5)) +
+  scale_fill_brewer(type = "qual", palette =   "Set3", guide = F) +
+  labs(title = "CBOE Volatility Index (VIX)", subtitle = "",
+       x = "", y = "value", caption = "Data: Yahoo Finance") +
+  theme_tq() + theme(axis.text.x = element_text(angle = 90, hjust = 1),
+                     axis.title.x = element_blank()) +
+  theme(legend.position = "none")+
+  geom_ma(ma_fun = SMA, n = 30, color="red") +                
+  geom_ma(ma_fun = SMA, n = 90, color="black") +
+  
+  coord_x_date(xlim = c("2015-07-01", "2023-12-31"))
+
+vix %>% select(date,adjusted)%>%rename(Date = date, VIX = adjusted)-> VIX
+VIX %>% tq_transmute(select = VIX , mutate_fun = to.monthly, indexAt = "lastof") -> VIX
+
+
+
+```
+
+```{r}
+
+# Yields Spreads
+
+
+TED_spread <- tq_get(c("TEDRATE"),
+                     get  = "economic.data",
+                     from = "1900-01-01",
+                     to   = Sys.Date())
+TED_spread %>% select(-symbol) %>% rename(Date = date, TED = price) -> TED_spread
+TED_spread %>% tq_transmute(select = TED , mutate_fun = to.monthly, indexAt = "lastof") -> TED_spread
+
+
+Tenyearminustwo_spread <- tq_get(c("T10Y2Y"),
+                     get  = "economic.data",
+                     from = "1900-01-01",
+                     to   = Sys.Date())
+Tenyearminustwo_spread %>% select(-symbol) %>% rename(Date = date, TENTWO = price) -> Tenyearminustwo_spread
+Tenyearminustwo_spread %>% tq_transmute(select = TENTWO , mutate_fun = to.monthly, indexAt = "lastof") ->  Tenyearminustwo_spread
+
+Tenyear <- tq_get(c("DGS10"),
+                                 get  = "economic.data",
+                                 from = "1900-01-01",
+                                 to   = Sys.Date())
+Tenyear %>% select(-symbol) %>% rename(Date = date, TEN = price) -> Tenyear
+Tenyear %>% tq_transmute(select = TEN , mutate_fun = to.monthly, indexAt = "lastof") ->  Tenyear
+
+Twoyear <- tq_get(c("DGS2"),
+                  get  = "economic.data",
+                  from = "1900-01-01",
+                  to   = Sys.Date())
+Twoyear %>% select(-symbol) %>% rename(Date = date, TWO = price) -> Twoyear
+Twoyear %>% tq_transmute(select = TWO , mutate_fun = to.monthly, indexAt = "lastof") ->  Twoyear
+
+
+
+```
+
+```{r}
+
+Tenyearminustwo_spread %>% 
+ 
+  ggplot(aes(x = Date, y = TENTWO )) +
+  
+  geom_line(color = "#E69F00") +
+  scale_x_date(date_breaks =  "2 years", date_labels = "%d %b %Y", expand = c(0, 0)) +
+  scale_y_continuous(breaks = seq(0,100, by = 5)) +
+  scale_fill_brewer(type = "qual", palette =   "Set3", guide = F) +
+  labs(title = "10 Years minus 2 Years Yield spread", subtitle = "",
+       x = "", y = "value", caption = "Data: Fred") +
+  theme_tq() + theme(axis.text.x = element_text(angle = 90, hjust = 1),
+                     axis.title.x = element_blank()) +
+  theme(legend.position = "none")+
+  geom_ma(ma_fun = SMA, n = 30, color="red") +                
+  geom_ma(ma_fun = SMA, n = 90, color="black") +
+  
+  coord_x_date(xlim = c("1980-01-01", "2023-12-31"))
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+## PMI data
+
+Quandl("ISM/MAN_PMI") -> PMI 
+
+PMI  %>% as.tibble() %>%
+  tq_transmute(select = PMI, mutate_fun = to.monthly, indexAt = "lastof") -> PMI
+
+PMI %>% 
+  ggplot(aes(x = Date, y = PMI)) +
+  
+  geom_line(color = "#E69F00") +
+  geom_hline(yintercept = 50 , color = "black" , linetype = "dashed") +
+  scale_x_date(date_breaks = "6 months", date_labels = "%d %b %Y", expand = c(0, 0)) +
+  scale_y_continuous(breaks = seq( 30,70, by = 5)) +
+  scale_fill_brewer(type = "qual", palette =   "Set3", guide = F) +
+  labs(title = "PMI", subtitle = "",
+       x = "", y = "value", caption = "") +
+  theme_tq() + theme(axis.text.x = element_text(angle = 90, hjust = 1),
+                     axis.title.x = element_blank()) +
+  theme(legend.position = "none")+
+  geom_ma(ma_fun = SMA, n = 3, color="red") +                
+  geom_ma(ma_fun = SMA, n = 12, color="black") +
+coord_x_date(xlim = c("2007-01-01", "2023-12-31"))
+```
+
+
+
+```{r}
+
+## FED Funds data
+
+FEDFUNDS <- tq_get(c("FEDFUNDS"),
+                      get  = "economic.data",
+                      from = "1900-01-01",
+                      to   = Sys.Date())
+    FEDFUNDS %>% select(-symbol) %>% rename(Date = date, FF = price) -> FEDFUNDS
+    FEDFUNDS %>% tq_transmute(select = FF , mutate_fun = to.monthly, indexAt = "lastof") ->  FEDFUNDS
+
+
+
+```
+
+```{r}
+## Join macro data
+
+left_join( G7_cli, cpi_g7 , by = 'Date') %>%  left_join( VIX , by = 'Date')%>%
+  left_join( Tenyearminustwo_spread, by = 'Date')%>%
+   left_join( Tenyear , by = 'Date')%>% left_join( Twoyear  , by = 'Date')  %>% 
+  left_join( FEDFUNDS  , by = 'Date') -> big_matrix
+
+
+
+big_matrix %>% na.omit()   %>% mutate( G7cpi_m3 = SMA(G7cpi,3)       ) %>% 
+  mutate( G7cpi_m36 = SMA(G7cpi,36) ) %>% mutate( G7cli_m3 = SMA(G7cli,3) ) -> big_matrix
+big_matrix %>% tail(10)
+
+
+
+
+
+```
+```{r}
+
+### Download etf prices and filter out etf quoted after 2015/04/30
+
+
+etfs <- read_excel("C:/Users/Utente/Downloads/asd.xlsx")
+
+prices_factors <-  etfs %>% 
+  tq_get(get = "stock.prices", from = "1960-01-01") %>% 
+  group_by(Ticker, Name)
+prices_factors %>%  filter( min(date) <= "2015-04-30"   ) -> prices_factors
+
+prices_factors
+
+prices_factors %>% tq_transmute(select = close , mutate_fun = periodReturn , type = 'arithmetic', period = 'monthly' ,
+                                indexAt ="lastof", values_fill = 0,
+                                col_rename = "Returns") -> Returns_factors_etfs
+Returns_factors_etfs %>% rename(Date = date) -> Returns_factors_etfs
+
+
+
+
+
+
+
+```
+
+```{r}
+
+## Join macro and etfs returns data
+
+left_join(  Returns_factors_etfs , big_matrix , by = 'Date' ) %>% group_by(Ticker, Name) -> Returns_MSCI_cli
+
+Returns_MSCI_cli %>% tail(10)
+
+
+
+
+```
+```{r, fig.width = 30 ,fig.height = 30}
+### performance when economy is in recovery after recession
+
+Returns_MSCI_cli %>% filter ( G7cli < 100 & G7cli > lag(G7cli) ) %>% tq_performance( Ra = Returns , performance_fun =  table.Stats , Rb = NULL ) %>% arrange(desc( GeometricMean))
+
+
+```
+
+```{r,    fig.width = 30 ,fig.height = 30, dpi = 500, fig.retina = 2}
+
+
+
+Returns_MSCI_cli %>%  filter( Date >= "2020-01-01"   ) %>% 
+  filter( G7cli < 100 & G7cli > lag(G7cli) ) %>%
+  ggplot(aes(y = Returns , x = reorder(Name, desc(Name)), color = Name)) +
+  geom_hline(yintercept = 0, color = "red") +
+  geom_boxplot(color = "black", alpha = 0.5) +
+  geom_point() +
+  scale_y_continuous(labels = scales::percent, limits = c(-0.5, 0.5)) +
+  coord_flip() +
+  labs(title = "Price returns of selected stocks/ETFs", subtitle = "2020-2023, monthly returns, ( G7cli < 100 & G7cli > lag(G7cli) )",
+       x = "Stock", y = "return") +
+  theme_tq() +
+  theme(legend.position = "none")
+
+
+```
+
+```{r}
+
+
+### performance when economy is in expansion and high inflation
+
+Returns_MSCI_cli %>% filter ( G7cli > 100 & G7cli > lag(G7cli) & G7cpi > FF & G7cpi > G7cpi_m3 ) %>% tq_performance( Ra = Returns , performance_fun =  table.Stats , Rb = NULL ) %>% arrange(desc( GeometricMean))
+
+
+
+```
+
+
+```{r,  fig.width = 30 ,fig.height = 30, dpi = 500, fig.retina = 2}
+
+
+
+Returns_MSCI_cli %>%  filter( Date >= "2020-01-01"   ) %>% 
+  filter(G7cli > 100 & G7cli > lag(G7cli) & G7cpi > FF & G7cpi > G7cpi_m3 ) %>%
+  ggplot(aes(y = Returns , x = reorder(Name, desc(Name)), color = Name)) +
+  geom_hline(yintercept = 0, color = "red") +
+  geom_boxplot(color = "black", alpha = 0.5) +
+  geom_point() +
+  scale_y_continuous(labels = scales::percent, limits = c(-0.5, 0.5)) +
+  coord_flip() +
+  labs(title = "Price returns of selected stocks/ETFs", subtitle = "2020-2023, monthly returns, ( G7cli < 100 & G7cli > lag(G7cli) )",
+       x = "Stock", y = "return") +
+  theme_tq() +
+  theme(legend.position = "none")
+
+```
+
+
+```{r}
+
+### performance when economy is in Slowdown ,inflation and rising interest rates
+
+Returns_MSCI_cli %>% filter ( G7cli > 100 & G7cli < lag(G7cli) & FF > lag(FF) & G7cpi > G7cpi_m3 ) %>% tq_performance( Ra = Returns , performance_fun =  table.Stats , Rb = NULL ) %>% arrange(desc( GeometricMean))
+
+```
+
+```{r,  fig.width = 30 ,fig.height = 30, dpi = 500, fig.retina = 2}
+
+
+
+Returns_MSCI_cli %>%  filter( Date >= "2020-01-01"   ) %>% 
+  filter( G7cli > 100 & G7cli < lag(G7cli) & FF > lag(FF) & G7cpi > G7cpi_m3 ) %>%
+  ggplot(aes(y = Returns , x = reorder(Name, desc(Name)), color = Name)) +
+  geom_hline(yintercept = 0, color = "red") +
+  geom_boxplot(color = "black", alpha = 0.5) +
+  geom_point() +
+  scale_y_continuous(labels = scales::percent, limits = c(-0.5, 0.5)) +
+  coord_flip() +
+  labs(title = "Price returns of selected stocks/ETFs", subtitle = "2020-2023, monthly returns, ( G7cli < 100 & G7cli > lag(G7cli) )",
+       x = "Stock", y = "return") +
+  theme_tq() +
+  theme(legend.position = "none")
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
