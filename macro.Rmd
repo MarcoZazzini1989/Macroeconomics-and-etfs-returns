@@ -29,7 +29,7 @@ library(ggforce)
 library(rvest)
 library(OECD)
 library(Quandl)
-Quandl.api_key("nxS25F-5b_PsWYfSys_E") 
+Quandl.api_key("YOU_KEY") 
 library(eurostat)
 
 
